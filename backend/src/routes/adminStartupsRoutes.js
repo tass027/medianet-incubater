@@ -8,6 +8,7 @@ const auth = [protect, authorize('admin')];
 
 // ── Liste & lecture ──────────────────────────────────────────────
 router.get('/',  ...auth, ctrl.getAll);
+router.get('/:id', ...auth, ctrl.getOne);
 
 // ── Assignation investisseurs / mentors ──────────────────────────
 router.patch('/:id/assign',   ...auth, ctrl.assign);
@@ -25,5 +26,8 @@ router.delete('/:id/session-history/:sessionId',   ...auth, ctrl.removeSessionHi
 // ── Formations spécifiques startup ───────────────────────────────
 router.post  ('/:id/formations',                   ...auth, ctrl.addFormation);
 router.delete('/:id/formations/:formationId',      ...auth, ctrl.removeFormation);
-
+// ── AI Matching ───────────────────────────────────────────────────
+router.get   ('/:id/ai-matching',          ...auth, ctrl.getAiMatches);
+router.post  ('/:id/ai-matching/generate', ...auth, ctrl.generateAiMatching);
+router.patch ('/:id/ai-matching/:matchId', ...auth, ctrl.updateAiMatch);
 module.exports = router;

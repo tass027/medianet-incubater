@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import ProtectedRoute from '@/app/components/common/ProtectedRoute';
 import DashboardLayout from '@/app/components/layout/DashboardLayout';
 import Badge from '@/app/components/common/Badge';
@@ -15,20 +15,6 @@ import { useAdminStartups } from '@/app/hooks/useAdminStartups';
 // ═══════════════════════════════════════════════════════════════════════════
 // STATIC REFERENCE DATA
 // ═══════════════════════════════════════════════════════════════════════════
-const MOCK_INVESTORS = [
-  { id: 'inv-1', name: 'Samia Belhadj',  company: 'AfriCInvest',     avatar: 'SB', color: '#006d94' },
-  { id: 'inv-2', name: 'Mehdi Gharbi',   company: 'BVMT Capital',    avatar: 'MG', color: '#8b5cf6' },
-  { id: 'inv-3', name: 'Leila Mansouri', company: 'Flat6Labs',       avatar: 'LM', color: '#10b981' },
-  { id: 'inv-4', name: 'Karim Oueslati', company: 'Sawari Ventures', avatar: 'KO', color: '#f59e0b' },
-  { id: 'inv-5', name: 'David Nkosi',    company: 'Partech Africa',  avatar: 'DN', color: '#ef4444' },
-];
-const MOCK_MENTORS = [
-  { id: 'men-1', name: 'Rania Souissi',  expertise: 'Growth & Marketing', avatar: 'RS', color: '#ec4899' },
-  { id: 'men-2', name: 'Yassine Khelif', expertise: 'Product & Tech',     avatar: 'YK', color: '#06b6d4' },
-  { id: 'men-3', name: 'Amira Hamdani',  expertise: 'Finance & Strategy', avatar: 'AH', color: '#84cc16' },
-  { id: 'men-4', name: 'Tarek Bouzid',   expertise: 'B2B Sales & Ops',    avatar: 'TB', color: '#f97316' },
-  { id: 'men-5', name: 'Sonia Trabelsi', expertise: 'Legal & Compliance', avatar: 'ST', color: '#a855f7' },
-];
 const SECTORS = ['FinTech','HealthTech','AgriTech','EdTech','CleanTech','SaaS','E-commerce','AI/ML','Logistics'];
 const SECTOR_COLOR = {
   FinTech:      ['#00526e','#006d94'],
@@ -55,15 +41,15 @@ const STATUS_MAP = {
   graduated: { label: 'Diplomee',  variant: 'info'    },
 };
 const FORMATION_TYPES = [
-  { id: 'onboarding_formation', label: 'Formation Onboarding'   },
-  { id: 'monthly_report',       label: 'Rapport Mensuel'        },
-  { id: 'kpi_update',           label: 'Mise a jour KPIs'       },
-  { id: 'mentoring_feedback',   label: 'Feedback Mentoring'     },
-  { id: 'investor_readiness',   label: 'Investor Readiness'     },
-  { id: 'custom',               label: 'Formation personnalisee'},
+  { id: 'onboarding_formation', label: 'Formation Onboarding'    },
+  { id: 'monthly_report',       label: 'Rapport Mensuel'         },
+  { id: 'kpi_update',           label: 'Mise a jour KPIs'        },
+  { id: 'mentoring_feedback',   label: 'Feedback Mentoring'      },
+  { id: 'investor_readiness',   label: 'Investor Readiness'      },
+  { id: 'custom',               label: 'Formation personnalisee' },
 ];
 const NEED_CATEGORIES = [
-  { id: 'technique',   label: 'Technique & Produit'   },
+  { id: 'technique',   label: 'Technique & Produit'    },
   { id: 'commercial',  label: 'Commercial & Ventes'    },
   { id: 'financier',   label: 'Financier & Levee'      },
   { id: 'rh',          label: 'RH & Recrutement'       },
@@ -84,26 +70,46 @@ const NEED_STATUSES = [
   { id: 'resolu',   label: 'Resolu'   },
 ];
 const SESSION_TYPES = [
-  { id: 'mentorat',     label: 'Mentorat'         },
-  { id: 'workshop',     label: 'Workshop'          },
-  { id: 'coaching',     label: 'Coaching'          },
-  { id: 'revue',        label: 'Revue de KPIs'     },
-  { id: 'investisseur', label: 'Rencontre Invest.' },
-  { id: 'formation',    label: 'Formation'         },
-  { id: 'pitch',        label: 'Pitch'             },
-  { id: 'conference',   label: 'Conference'        },
-  { id: 'autre',        label: 'Autre'             },
+  { id: 'workshop',   label: 'Workshop'              },
+  { id: 'formation',  label: 'Formation'             },
+  { id: 'conference', label: 'Conférence'            },
+  { id: 'pitching',   label: 'Pitch & Investisseurs' },
+  { id: 'mentoring',  label: 'Mentorat One-to-One'   },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
-const getSectorGrad   = (sector) => SECTOR_COLOR[sector] || ['#475569','#64748b'];
-const getScoreColor   = (s) => s >= 80 ? 'text-emerald-600 dark:text-emerald-400' : s >= 60 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';
-const getScoreBar     = (s) => s >= 80 ? 'bg-emerald-500' : s >= 60 ? 'bg-amber-500' : 'bg-red-500';
-const getPhaseIndex   = (id) => TIMELINE_PHASES.findIndex((p) => p.id === id);
-const resolveInvestor = (id) => MOCK_INVESTORS.find((i) => i.id === id) || null;
-const resolveMentor   = (id) => MOCK_MENTORS.find((m) => m.id === id)   || null;
+const getSectorGrad = (sector) => SECTOR_COLOR[sector] || ['#475569','#64748b'];
+const getScoreColor = (s) => s >= 80 ? 'text-emerald-600 dark:text-emerald-400' : s >= 60 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';
+const getScoreBar   = (s) => s >= 80 ? 'bg-emerald-500' : s >= 60 ? 'bg-amber-500' : 'bg-red-500';
+const getPhaseIndex = (id) => TIMELINE_PHASES.findIndex((p) => p.id === id);
+
+const makeAvatar = (str = '') => (str || '?').substring(0, 2).toUpperCase();
+const AVATAR_COLORS = ['#006d94','#8b5cf6','#10b981','#f59e0b','#ef4444','#ec4899','#06b6d4','#84cc16','#f97316','#a855f7'];
+const colorForId   = (id = '') => AVATAR_COLORS[id.charCodeAt(id.length - 1) % AVATAR_COLORS.length];
+
+const makeAuthHeaders = (token) => ({
+  'Content-Type': 'application/json',
+  ...(token ? { Authorization: `Bearer ${token}` } : {}),
+});
+
+// ── Safe JSON fetch helper ────────────────────────────────────────────────────
+// Prevents crash when the server returns HTML (404 page, proxy error, etc.)
+const safeJsonFetch = async (url, options = {}) => {
+  try {
+    const res = await fetch(url, options);
+    const contentType = res.headers.get('content-type') || '';
+    if (!res.ok || !contentType.includes('application/json')) {
+      console.warn(`[safeJsonFetch] Non-JSON response from ${url} (status: ${res.status})`);
+      return { success: false, data: [] };
+    }
+    return await res.json();
+  } catch (err) {
+    console.error(`[safeJsonFetch] Error fetching ${url}:`, err.message);
+    return { success: false, data: [] };
+  }
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ICONS
@@ -121,7 +127,6 @@ const Icons = {
   trash:    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>,
   sessions: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>,
   building: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>,
-  doc:      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>,
   chart:    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>,
   send:     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>,
 };
@@ -132,8 +137,8 @@ const iCls = 'w-full px-4 py-2.5 text-sm bg-white dark:bg-gray-800 border border
 // PAGE
 // ═══════════════════════════════════════════════════════════════════════════
 export default function AdminStartupsPage() {
-  const { user } = useSelector((state) => state.auth);
-  const { t }    = useTranslation();
+  const { user, token } = useSelector((state) => state.auth);
+  const { t }           = useTranslation();
 
   const [mounted,      setMounted]      = useState(false);
   const [time,         setTime]         = useState(new Date());
@@ -147,11 +152,12 @@ export default function AdminStartupsPage() {
   const [mentors,      setMentors]      = useState([]);
 
   useEffect(() => {
-    fetch('/api/admin/mentors', { credentials: 'include' })
-      .then((r) => r.json())
-      .then((j) => { if (j.success) setMentors(j.data || []); })
-      .catch(() => {});
-  }, []);
+    if (!token) return;
+    safeJsonFetch('/api/admin/mentors', {
+      credentials: 'include',
+      headers: makeAuthHeaders(token),
+    }).then((j) => { if (j.success) setMentors(j.data || []); });
+  }, [token]);
 
   const { startups, loading, error, refetch, updateAssignments, updateTimeline } =
     useAdminStartups({ sector: fSector, status: fStatus, search });
@@ -172,14 +178,17 @@ export default function AdminStartupsPage() {
   };
 
   const handleSaveAssignments = async (startupId, investorIds, mentorIds) => {
+    console.log('[assign] startupId:', startupId, 'investors:', investorIds, 'mentors:', mentorIds);
     try {
-      await updateAssignments(startupId, investorIds, mentorIds);
+      const result = await updateAssignments(startupId, investorIds, mentorIds);
+      console.log('[assign] résultat:', result);
       if (selected?.id === startupId) {
         setSelected((prev) => ({ ...prev, investorIds: [...investorIds], mentorIds: [...mentorIds] }));
       }
-      showNotification('success', 'Assignations mises a jour.');
-    } catch {
-      showNotification('error', 'Erreur lors de la sauvegarde.');
+      showNotification('success', 'Assignations mises à jour.');
+    } catch (err) {
+      console.error('[assign] erreur:', err);
+      showNotification('error', `Erreur: ${err.message}`);
     }
   };
 
@@ -484,8 +493,8 @@ export default function AdminStartupsPage() {
                       </div>
 
                       <div className="flex items-center justify-between mb-3">
-                        <InvestorAvatars ids={startup.investorIds} />
-                        <MentorAvatars   ids={startup.mentorIds} />
+                        <IdAvatarGroup ids={startup.investorIds} label="Inv." baseColor="#006d94" />
+                        <IdAvatarGroup ids={startup.mentorIds}   label="Men." baseColor="#8b5cf6" />
                       </div>
 
                       <div className="pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
@@ -557,8 +566,8 @@ export default function AdminStartupsPage() {
                               <div className="h-full rounded-full" style={{ width: `${startup.timelineProgress}%`, background: `linear-gradient(90deg,${g1},${g2})` }} />
                             </div>
                           </td>
-                          <td className="px-5 py-3.5"><InvestorAvatars ids={startup.investorIds} size="sm" /></td>
-                          <td className="px-5 py-3.5"><MentorAvatars   ids={startup.mentorIds}   size="sm" /></td>
+                          <td className="px-5 py-3.5"><IdAvatarGroup ids={startup.investorIds} label="Inv." baseColor="#006d94" size="sm" /></td>
+                          <td className="px-5 py-3.5"><IdAvatarGroup ids={startup.mentorIds}   label="Men." baseColor="#8b5cf6" size="sm" /></td>
                           <td className="px-5 py-3.5">
                             <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                               <button onClick={() => { setSelected(startup); setModalTab('assign');     setIsModalOpen(true); }} className="px-2 py-1 text-xs font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 rounded-lg hover:bg-primary-100">Assigner</button>
@@ -584,6 +593,7 @@ export default function AdminStartupsPage() {
             initialTab={modalTab}
             onSaveAssignments={handleSaveAssignments}
             onSaveTimeline={handleSaveTimeline}
+            token={token}
           />
         )}
 
@@ -599,47 +609,22 @@ export default function AdminStartupsPage() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// AVATAR COMPONENTS
+// AVATAR GÉNÉRIQUE
 // ═══════════════════════════════════════════════════════════════════════════
-function InvestorAvatars({ ids = [], size = 'md' }) {
+function IdAvatarGroup({ ids = [], label, baseColor, size = 'md' }) {
   const wh = size === 'sm' ? 'w-7 h-7 text-[10px]' : 'w-6 h-6 text-[9px]';
   if (!ids || ids.length === 0) return <span className="text-xs text-red-400 italic">Non assigne</span>;
   return (
     <div className="flex items-center gap-1">
-      <span className="text-[10px] text-gray-400 uppercase tracking-wide mr-1">Inv.</span>
+      <span className="text-[10px] text-gray-400 uppercase tracking-wide mr-1">{label}</span>
       <div className="flex -space-x-1">
-        {ids.map((id) => {
-          const inv = resolveInvestor(id);
-          return (
-            <div key={id} title={inv ? `${inv.name} - ${inv.company}` : `ID: ${id}`}
-              className={`${wh} rounded-full flex items-center justify-center text-white font-bold ring-2 ring-white dark:ring-gray-900`}
-              style={{ background: inv?.color || '#94a3b8' }}>
-              {inv ? inv.avatar : '?'}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function MentorAvatars({ ids = [], size = 'md' }) {
-  const wh = size === 'sm' ? 'w-7 h-7 text-[10px]' : 'w-6 h-6 text-[9px]';
-  if (!ids || ids.length === 0) return <span className="text-xs text-red-400 italic">Non assigne</span>;
-  return (
-    <div className="flex items-center gap-1">
-      <span className="text-[10px] text-gray-400 uppercase tracking-wide mr-1">Men.</span>
-      <div className="flex -space-x-1">
-        {ids.map((id) => {
-          const men = resolveMentor(id);
-          return (
-            <div key={id} title={men ? `${men.name} - ${men.expertise}` : `ID: ${id}`}
-              className={`${wh} rounded-full flex items-center justify-center text-white font-bold ring-2 ring-white dark:ring-gray-900`}
-              style={{ background: men?.color || '#94a3b8' }}>
-              {men ? men.avatar : '?'}
-            </div>
-          );
-        })}
+        {ids.map((id) => (
+          <div key={id} title={`ID: ${id}`}
+            className={`${wh} rounded-full flex items-center justify-center text-white font-bold ring-2 ring-white dark:ring-gray-900`}
+            style={{ background: colorForId(String(id)) }}>
+            {makeAvatar(String(id))}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -648,7 +633,7 @@ function MentorAvatars({ ids = [], size = 'md' }) {
 // ═══════════════════════════════════════════════════════════════════════════
 // STARTUP MODAL
 // ═══════════════════════════════════════════════════════════════════════════
-function StartupModal({ isOpen, onClose, startup, initialTab, onSaveAssignments, onSaveTimeline }) {
+function StartupModal({ isOpen, onClose, startup, initialTab, onSaveAssignments, onSaveTimeline, token }) {
   const [activeTab,        setActiveTab]        = useState(initialTab || 'overview');
   const [investorIds,      setInvestorIds]      = useState([...(startup.investorIds || [])]);
   const [mentorIds,        setMentorIds]        = useState([...(startup.mentorIds   || [])]);
@@ -660,6 +645,72 @@ function StartupModal({ isOpen, onClose, startup, initialTab, onSaveAssignments,
   const [besoins,           setBesoins]      = useState(startup.besoins           || []);
   const [sessions,          setSessions]     = useState(startup.sessionHistory    || []);
   const [startupFormations, setStartupForms] = useState(startup.startupFormations || []);
+
+  const [realInvestors, setRealInvestors] = useState([]);
+  const [realMentors,   setRealMentors]   = useState([]);
+  const [loadingPool,   setLoadingPool]   = useState(false);
+  const [poolError,     setPoolError]     = useState(null);
+
+  // aiMatches — initialisé depuis le champ backend startup.aiMatches
+  const [aiMatches, setAiMatches] = useState(startup.aiMatches || []);
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // FIX PRINCIPAL : fetch sécurisé avec safeJsonFetch pour éviter le crash
+  // "Unexpected token '<'" quand /api/admin/startups/:id/ai-matching
+  // retourne du HTML (404, proxy non configuré, route manquante, etc.)
+  // ═══════════════════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (activeTab !== 'assign') return;
+
+    setLoadingPool(true);
+    setPoolError(null);
+
+    // Résoudre le token depuis plusieurs sources possibles
+    const authToken = token
+      || (typeof window !== 'undefined' && (
+           localStorage.getItem('token') ||
+           localStorage.getItem('accessToken') ||
+           localStorage.getItem('authToken')
+         ));
+
+    const headers = makeAuthHeaders(authToken);
+    const opts    = { credentials: 'include', headers };
+
+    Promise.all([
+      safeJsonFetch('/api/admin/investors',                           opts),
+      safeJsonFetch('/api/admin/mentors',                            opts),
+      safeJsonFetch(`/api/admin/startups/${startup.id}/ai-matching`, opts),
+    ])
+      .then(([invRes, menRes, aiRes]) => {
+        if (invRes.success) setRealInvestors(invRes.data || []);
+        if (menRes.success) setRealMentors(menRes.data   || []);
+        // Utiliser les aiMatches de l'API si disponibles, sinon garder ceux du startup
+        if (aiRes.success && Array.isArray(aiRes.data)) {
+          setAiMatches(aiRes.data);
+        }
+        // Si les listes sont vides, afficher un message d'erreur explicite
+        if (!invRes.success && !menRes.success) {
+          setPoolError('Impossible de charger les investisseurs et mentors — vérifiez la connexion à l\'API.');
+        }
+      })
+      .catch((err) => {
+        console.error('[StartupModal] fetch pool error:', err);
+        setPoolError('Erreur réseau lors du chargement des données.');
+      })
+      .finally(() => setLoadingPool(false));
+  }, [activeTab, token, startup.id]);
+
+  // IDs recommandés par l'IA — lus depuis aiMatches[]
+  const aiInvestorIds = new Set(
+    aiMatches
+      .filter((m) => m.type === 'investor' && m.status !== 'rejected')
+      .map((m) => String(m.targetId))
+  );
+  const aiMentorIds = new Set(
+    aiMatches
+      .filter((m) => m.type === 'mentor' && m.status !== 'rejected')
+      .map((m) => String(m.targetId))
+  );
 
   const [showNeedForm,    setShowNeedForm]    = useState(false);
   const [newBesoin,       setNewBesoin]       = useState({ category: 'technique', priority: 'moyenne', title: '', description: '', status: 'ouvert' });
@@ -678,6 +729,8 @@ function StartupModal({ isOpen, onClose, startup, initialTab, onSaveAssignments,
     setBesoins(startup.besoins           || []);
     setSessions(startup.sessionHistory   || []);
     setStartupForms(startup.startupFormations || []);
+    setAiMatches(startup.aiMatches || []);
+    setPoolError(null);
   }, [startup, initialTab]);
 
   const [g1, g2] = getSectorGrad(startup.sector);
@@ -685,8 +738,11 @@ function StartupModal({ isOpen, onClose, startup, initialTab, onSaveAssignments,
 
   const handleSaveAssign = async () => {
     setSaving(true);
-    await onSaveAssignments(startup.id, investorIds, mentorIds);
-    setSaving(false);
+    try {
+      await onSaveAssignments(startup.id, investorIds, mentorIds);
+    } finally {
+      setSaving(false); // toujours appelé
+    }
   };
 
   const handleSaveTimeline = async () => {
@@ -695,36 +751,64 @@ function StartupModal({ isOpen, onClose, startup, initialTab, onSaveAssignments,
     setSaving(false);
   };
 
-  const handleCreateBesoin = () => {
+  const handleCreateBesoin = async () => {
     if (!newBesoin.title) return;
-    setBesoins((prev) => [...prev, { id: `b${Date.now()}`, ...newBesoin, createdAt: new Date().toISOString() }]);
+    const updated = [...besoins, { id: `b${Date.now()}`, ...newBesoin, createdAt: new Date().toISOString() }];
+    setBesoins(updated);
     setNewBesoin({ category: 'technique', priority: 'moyenne', title: '', description: '', status: 'ouvert' });
     setShowNeedForm(false);
+    // ← persister en base
+    try {
+      await fetch(`/api/admin/startups/${startup.id}/besoins`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: makeAuthHeaders(token),
+        body: JSON.stringify({ besoins: updated }),
+      });
+    } catch (err) {
+      console.warn('[besoins] persist error:', err.message);
+    }
   };
 
-  const handleCreateSession = () => {
-    if (!newSession.title || !newSession.date) return;
-    setSessions((prev) => [...prev, { id: `s${Date.now()}`, ...newSession, createdAt: new Date().toISOString() }]);
-    setNewSession({ type: 'mentorat', title: '', date: '', duration: '', participants: '', notes: '', outcome: '' });
-    setShowSessionForm(false);
-  };
+const handleCreateSession = async () => {
+  if (!newSession.title || !newSession.date) return;
+  const newEntry = { id: `s${Date.now()}`, ...newSession, createdAt: new Date().toISOString() };
+  setSessions((prev) => [...prev, newEntry]);
+  setNewSession({ type: 'mentorat', title: '', date: '', duration: '', participants: '', notes: '', outcome: '' });
+  setShowSessionForm(false);
+  try {
+    await fetch(`/api/admin/startups/${startup.id}/session-history`, {
+      method: 'POST', credentials: 'include',
+      headers: makeAuthHeaders(token),
+      body: JSON.stringify(newSession),
+    });
+  } catch (err) { console.warn('[session] persist error:', err.message); }
+};
 
-  const handleCreateFormation = () => {
-    if (!newFormation.title) return;
-    setStartupForms((prev) => [...prev, { id: `sf${Date.now()}`, ...newFormation, status: 'active', responses: 0, total: 1, sentAt: new Date().toISOString() }]);
-    setNewFormation({ type: 'custom', title: '', deadline: '', description: '' });
-    setShowNewForm(false);
-  };
+const handleCreateFormation = async () => {
+  if (!newFormation.title) return;
+  const newEntry = { id: `sf${Date.now()}`, ...newFormation, status: 'active', responses: 0, total: 1, sentAt: new Date().toISOString() };
+  setStartupForms((prev) => [...prev, newEntry]);
+  setNewFormation({ type: 'custom', title: '', deadline: '', description: '' });
+  setShowNewForm(false);
+  try {
+    await fetch(`/api/admin/startups/${startup.id}/formations`, {
+      method: 'POST', credentials: 'include',
+      headers: makeAuthHeaders(token),
+      body: JSON.stringify(newFormation),
+    });
+  } catch (err) { console.warn('[formation] persist error:', err.message); }
+};
 
   const TABS = [
-    { id: 'overview',   label: "Vue d'ensemble"         },
-    { id: 'besoins',    label: 'Besoins'                 },
-    { id: 'assign',     label: 'Investisseurs & Mentors' },
-    { id: 'timeline',   label: 'Timeline'                },
-    { id: 'sessions',   label: 'Historique Sessions'     },
-    { id: 'formations', label: 'Formations specifiques'  },
-    { id: 'kpis',       label: 'KPIs'                    },
-    { id: 'matching',   label: 'Matching IA'             },
+    { id: 'overview',   label: "Vue d'ensemble"          },
+    { id: 'besoins',    label: 'Besoins'                  },
+    { id: 'matching',   label: 'Matching IA'              },
+    { id: 'assign',     label: 'Investisseurs & Mentors'  },
+    { id: 'formations', label: 'Formations specifiques'   },
+    { id: 'sessions',   label: 'Historique Sessions'      },
+    { id: 'kpis',       label: 'KPIs'                     },
+    { id: 'timeline',   label: 'Timeline'                 },
   ];
 
   return (
@@ -749,7 +833,7 @@ function StartupModal({ isOpen, onClose, startup, initialTab, onSaveAssignments,
         </div>
       </div>
 
-      {/* VUE D'ENSEMBLE */}
+      {/* ── VUE D'ENSEMBLE ─────────────────────────────────────────────── */}
       {activeTab === 'overview' && (
         <div className="space-y-5">
           <div className="flex items-start gap-5 p-5 rounded-2xl" style={{ background: `linear-gradient(135deg,${g1}18,${g2}18)`, border: `1px solid ${g1}30` }}>
@@ -780,53 +864,152 @@ function StartupModal({ isOpen, onClose, startup, initialTab, onSaveAssignments,
             ))}
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <AssignSummary title="Investisseurs" ids={investorIds} pool={MOCK_INVESTORS} />
-            <AssignSummary title="Mentors"       ids={mentorIds}   pool={MOCK_MENTORS} isMentor />
+            <IdAssignSummary title="Investisseurs" ids={investorIds} baseColor="#006d94" />
+            <IdAssignSummary title="Mentors"       ids={mentorIds}   baseColor="#8b5cf6" />
           </div>
         </div>
       )}
 
-      {/* MATCHING IA */}
+      {/* ── MATCHING IA ────────────────────────────────────────────────── */}
       {activeTab === 'matching' && (
-        <MatchingPanel applicationId={startup.id} applicationStatus={startup.applicationStatus} />
+        <MatchingPanel
+          applicationId={startup.id}
+          applicationStatus={startup.applicationStatus}
+          onApproved={() => setActiveTab('assign')}
+        />
       )}
 
-      {/* ASSIGN */}
+      {/* ── ASSIGN ─────────────────────────────────────────────────────── */}
       {activeTab === 'assign' && (
         <div className="space-y-6">
+          {/* Résumé des assignations actuelles */}
           {(investorIds.length > 0 || mentorIds.length > 0) && (
             <div className="p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-xl">
               <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-2">Assignations actuelles</p>
               <div className="flex flex-wrap gap-2">
-                {investorIds.map((id) => { const inv = resolveInvestor(id); return (
-                  <span key={id} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white dark:bg-gray-800 border border-green-200 dark:border-green-700 rounded-full text-xs font-medium text-gray-700 dark:text-gray-300">
-                    <span className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[9px]" style={{ background: inv?.color || '#94a3b8' }}>{inv?.avatar || '?'}</span>
-                    {inv?.name || id} <span className="text-gray-400">· Inv.</span>
-                  </span>
-                ); })}
-                {mentorIds.map((id) => { const men = resolveMentor(id); return (
-                  <span key={id} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white dark:bg-gray-800 border border-green-200 dark:border-green-700 rounded-full text-xs font-medium text-gray-700 dark:text-gray-300">
-                    <span className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[9px]" style={{ background: men?.color || '#94a3b8' }}>{men?.avatar || '?'}</span>
-                    {men?.name || id} <span className="text-gray-400">· Men.</span>
-                  </span>
-                ); })}
+                {investorIds.map((id) => {
+                  const inv = realInvestors.find((x) => String(x._id) === String(id));
+                  return (
+                    <span key={id} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white dark:bg-gray-800 border border-green-200 dark:border-green-700 rounded-full text-xs font-medium text-gray-700 dark:text-gray-300">
+                      <span className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[9px]" style={{ background: colorForId(String(id)) }}>
+                        {makeAvatar(inv?.nom || inv?.name || String(id))}
+                      </span>
+                      {inv?.nom || inv?.name || id} <span className="text-gray-400">· Inv.</span>
+                    </span>
+                  );
+                })}
+                {mentorIds.map((id) => {
+                  const men = realMentors.find((x) => String(x._id) === String(id));
+                  return (
+                    <span key={id} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white dark:bg-gray-800 border border-green-200 dark:border-green-700 rounded-full text-xs font-medium text-gray-700 dark:text-gray-300">
+                      <span className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[9px]" style={{ background: colorForId(String(id)) }}>
+                        {makeAvatar(men?.name || men?.email || String(id))}
+                      </span>
+                      {men?.name || men?.email || id} <span className="text-gray-400">· Men.</span>
+                    </span>
+                  );
+                })}
               </div>
             </div>
           )}
-          <SelectableList title="Investisseurs" selectedIds={investorIds}
-            onToggle={(id) => setInvestorIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])}
-            items={MOCK_INVESTORS.map((i) => ({ id: i.id, primary: i.name, secondary: i.company, avatar: i.avatar, color: i.color }))} g1={g1} />
-          <div className="h-px bg-gray-200 dark:bg-gray-700" />
-          <SelectableList title="Mentors" selectedIds={mentorIds}
-            onToggle={(id) => setMentorIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])}
-            items={MOCK_MENTORS.map((m) => ({ id: m.id, primary: m.name, secondary: m.expertise, avatar: m.avatar, color: m.color }))} g1={g1} />
+
+          {/* Erreur de chargement */}
+          {poolError && (
+            <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-amber-700 dark:text-amber-300">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+              </svg>
+              {poolError}
+            </div>
+          )}
+
+          {loadingPool ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <svg className="w-8 h-8 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+              </svg>
+              <p className="text-xs text-gray-400">Chargement des investisseurs et mentors...</p>
+            </div>
+          ) : (
+            <>
+              {/* Bandeau info IA */}
+              {(aiInvestorIds.size > 0 || aiMentorIds.size > 0) && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl text-xs text-blue-700 dark:text-blue-300">
+                  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                  </svg>
+                  Les entrées marquées <span className="font-semibold mx-1">⚡ IA</span> sont recommandées par l'algorithme de matching.
+                </div>
+              )}
+
+              {/* ── LISTE INVESTISSEURS ── */}
+              <AiSelectableList
+                title="Investisseurs"
+                selectedIds={investorIds}
+                onToggle={(id) => setInvestorIds((prev) =>
+                  prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+                )}
+                items={realInvestors.map((inv) => {
+                  const match = aiMatches.find(
+                    (m) => m.type === 'investor'
+                      && String(m.targetId) === String(inv._id)
+                      && m.status !== 'rejected'
+                  );
+                  return {
+                    id:        String(inv._id),
+                    primary:   inv.nom || inv.name || inv.firstName || '—',
+                    secondary: inv.type || inv.investorType || (inv.secteurs || inv.sectors || []).join(', ') || '',
+                    avatar:    makeAvatar(inv.nom || inv.name || inv.firstName),
+                    color:     '#006d94',
+                    aiScore:   match ? (match.score ?? null) : null,
+                    aiReasons: match?.reasons || [],
+                  };
+                })}
+                g1={g1}
+              />
+
+              <div className="h-px bg-gray-200 dark:bg-gray-700" />
+
+              {/* ── LISTE MENTORS ── */}
+              <AiSelectableList
+                title="Mentors"
+                selectedIds={mentorIds}
+                onToggle={(id) => setMentorIds((prev) =>
+                  prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+                )}
+                // Dans StartupModal, onglet 'assign' — mapping mentors
+                items={realMentors.map((men) => {
+                  const match = aiMatches.find(
+                    (m) => m.type === 'mentor'
+                      && String(m.targetId) === String(men._id)
+                      && m.status !== 'rejected'
+                  );
+                  return {
+                    id:        String(men._id),
+                    primary:   men.name || men.email || '—',
+                    secondary: [
+                      (men.expertise || []).join(', '),
+                      men.company,
+                    ].filter(Boolean).join(' · ') || men.email || '',
+                    avatar:    makeAvatar(men.name || men.email),
+                    color:     '#8b5cf6',
+                    aiScore:   match ? (match.score ?? null) : null,
+                    aiReasons: match?.reasons || [],
+                  };
+                })}
+                g1={g1}
+              />
+            </>
+          )}
+
           <div className="flex justify-end pt-2 border-t border-gray-200 dark:border-gray-700">
             <SaveButton onClick={handleSaveAssign} saving={saving} label="Enregistrer les assignations" color="primary" />
           </div>
         </div>
       )}
 
-      {/* TIMELINE */}
+      {/* ── TIMELINE ───────────────────────────────────────────────────── */}
       {activeTab === 'timeline' && (
         <div className="space-y-6">
           <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700">
@@ -876,7 +1059,7 @@ function StartupModal({ isOpen, onClose, startup, initialTab, onSaveAssignments,
         </div>
       )}
 
-      {/* BESOINS */}
+      {/* ── BESOINS ────────────────────────────────────────────────────── */}
       {activeTab === 'besoins' && (
         <div className="space-y-5">
           <div className="flex items-center justify-between">
@@ -969,7 +1152,7 @@ function StartupModal({ isOpen, onClose, startup, initialTab, onSaveAssignments,
         </div>
       )}
 
-      {/* HISTORIQUE SESSIONS */}
+      {/* ── HISTORIQUE SESSIONS ────────────────────────────────────────── */}
       {activeTab === 'sessions' && (
         <div className="space-y-5">
           <div className="flex items-center justify-between">
@@ -1064,7 +1247,7 @@ function StartupModal({ isOpen, onClose, startup, initialTab, onSaveAssignments,
         </div>
       )}
 
-      {/* FORMATIONS SPECIFIQUES */}
+      {/* ── FORMATIONS SPECIFIQUES ─────────────────────────────────────── */}
       {activeTab === 'formations' && (
         <div className="space-y-5">
           <div className="flex items-center justify-between">
@@ -1124,7 +1307,7 @@ function StartupModal({ isOpen, onClose, startup, initialTab, onSaveAssignments,
         </div>
       )}
 
-      {/* KPIs */}
+      {/* ── KPIs ───────────────────────────────────────────────────────── */}
       {activeTab === 'kpis' && (
         <div className="space-y-5">
           <div className="grid grid-cols-3 gap-4">
@@ -1164,51 +1347,102 @@ function StartupModal({ isOpen, onClose, startup, initialTab, onSaveAssignments,
 // ═══════════════════════════════════════════════════════════════════════════
 // SOUS-COMPOSANTS
 // ═══════════════════════════════════════════════════════════════════════════
-function AssignSummary({ title, ids, pool, isMentor }) {
+function IdAssignSummary({ title, ids, baseColor }) {
   return (
     <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700">
       <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">{title} ({ids.length})</p>
-      {ids.length === 0 ? <p className="text-xs text-red-400 italic">Aucun assigne</p> : ids.map((id) => {
-        const item = pool.find((x) => x.id === id);
-        return item ? (
+      {ids.length === 0 ? (
+        <p className="text-xs text-red-400 italic">Aucun assigne</p>
+      ) : (
+        ids.map((id) => (
           <div key={id} className="flex items-center gap-2 mb-1.5">
-            <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-bold" style={{ background: item.color }}>{item.avatar}</div>
-            <span className="text-xs text-gray-700 dark:text-gray-300">{item.name}</span>
-            {isMentor && item.expertise && <span className="text-[10px] text-gray-400">· {item.expertise}</span>}
-            {!isMentor && item.company   && <span className="text-[10px] text-gray-400">· {item.company}</span>}
-          </div>
-        ) : (
-          <div key={id} className="flex items-center gap-2 mb-1.5">
-            <div className="w-6 h-6 rounded-full bg-gray-400 flex items-center justify-center text-white text-[9px] font-bold">?</div>
+            <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-bold" style={{ background: colorForId(String(id)) }}>
+              {makeAvatar(String(id))}
+            </div>
             <span className="text-xs text-gray-400 italic mono">{id}</span>
           </div>
-        );
-      })}
+        ))
+      )}
     </div>
   );
 }
 
-function SelectableList({ title, selectedIds, onToggle, items, g1 }) {
+// ═══════════════════════════════════════════════════════════════════════════
+// AiSelectableList — affiche tous les items, badge ⚡IA sur les recommandés
+// ═══════════════════════════════════════════════════════════════════════════
+function AiSelectableList({ title, selectedIds, onToggle, items, g1 }) {
+  // Trier : recommandés IA en premier (par score desc), puis alphabétique
+  const sorted = [...items].sort((a, b) => {
+    if (a.aiScore !== null && b.aiScore === null) return -1;
+    if (a.aiScore === null && b.aiScore !== null) return  1;
+    if (a.aiScore !== null && b.aiScore !== null) return b.aiScore - a.aiScore;
+    return (a.primary || '').localeCompare(b.primary || '');
+  });
+
   return (
     <div>
-      <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">{title} — {selectedIds.length} selectionne(s)</p>
-      <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-        {items.map((item) => {
-          const sel = selectedIds.includes(item.id);
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+          {title} — <span className="text-primary-600 dark:text-primary-400">{selectedIds.length} sélectionné(s)</span>
+        </p>
+        <span className="text-xs text-gray-400">{sorted.length} au total</span>
+      </div>
+      <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+        {sorted.map((item) => {
+          const sel  = selectedIds.includes(item.id);
+          const isAi = item.aiScore !== null;
           return (
             <div key={item.id} onClick={() => onToggle(item.id)}
-              className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border-2 ${sel ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/10' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'}`}>
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style={{ background: sel ? g1 : item.color }}>{item.avatar}</div>
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-gray-900 dark:text-white">{item.primary}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{item.secondary}</p>
+              className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border-2 ${
+                sel
+                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/10'
+                  : isAi
+                  ? 'border-blue-200 dark:border-blue-800 bg-blue-50/40 dark:bg-blue-950/10 hover:border-blue-300 dark:hover:border-blue-700'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800/30'
+              }`}>
+              {/* Avatar */}
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+                style={{ background: sel ? g1 : item.color }}>
+                {item.avatar}
               </div>
-              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${sel ? 'border-primary-500 bg-primary-500' : 'border-gray-300 dark:border-gray-600'}`}>
-                {sel && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>}
+
+              {/* Infos */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{item.primary}</p>
+                  {isAi && (
+                    <span
+                      title={item.aiReasons?.length ? item.aiReasons.join(' · ') : 'Recommandé par l\'IA'}
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 flex-shrink-0 cursor-help select-none"
+                    >
+                      ⚡ IA {item.aiScore}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{item.secondary}</p>
+              </div>
+
+              {/* Checkbox */}
+              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                sel ? 'border-primary-500 bg-primary-500' : 'border-gray-300 dark:border-gray-600'
+              }`}>
+                {sel && (
+                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/>
+                  </svg>
+                )}
               </div>
             </div>
           );
         })}
+        {sorted.length === 0 && (
+          <div className="text-center py-8 text-gray-400 dark:text-gray-500">
+            <svg className="w-8 h-8 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+            <p className="text-xs">Aucun résultat — vérifiez la connexion à l'API.</p>
+          </div>
+        )}
       </div>
     </div>
   );

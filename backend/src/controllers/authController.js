@@ -112,8 +112,8 @@ exports.checkValidation = (req, res, next) => {
 // ─────────────────────────────────────────────────────
 // TOKEN HELPERS
 // ─────────────────────────────────────────────────────
-const signAccessToken  = (payload) => jwt.sign(payload, process.env.JWT_ACCESS_SECRET,  { expiresIn: '15m' });
-const signRefreshToken = (payload) => jwt.sign(payload, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d'  });
+const signAccessToken  = (payload) => jwt.sign(payload, process.env.JWT_ACCESS_SECRET,  { expiresIn: process.env.JWT_ACCESS_EXPIRES  || '24h' });
+const signRefreshToken = (payload) => jwt.sign(payload, process.env.JWT_REFRESH_SECRET, { expiresIn: process.env.JWT_REFRESH_EXPIRES || '7d'  });
 
 const setRefreshCookie = (res, token) => {
   res.cookie('refresh_token', token, {

@@ -23,9 +23,13 @@ axiosAuth.interceptors.response.use(
   (response) => response,
   (error) => {
     if (process.env.NODE_ENV === 'development') {
-      console.error(
-        `[axiosAuth] ${error?.response?.status ?? 'Network Error'} → ${error?.config?.url}`
-      );
+      const is404AiReporting = error?.response?.status === 404 &&
+        error?.config?.url?.includes('/ai-reporting/');
+      if (!is404AiReporting) {
+        console.error(
+          `[axiosAuth] ${error?.response?.status ?? 'Network Error'} → ${error?.config?.url}`
+        );
+      }
     }
     return Promise.reject(error);
   }

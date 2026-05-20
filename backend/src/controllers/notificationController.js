@@ -1,40 +1,33 @@
-// src/controllers/notificationController.js
-
 const Notification = require('../models/Notification');
 
-// ─────────────────────────────────────────────────────────────
-// GET /api/notifications/me
-// Récupère les 30 dernières notifs du user connecté
-// ─────────────────────────────────────────────────────────────
 exports.getMyNotifications = async (req, res) => {
   try {
-    const notifications = await Notification.find({ user: req.user._id })
+    const filter = { recipientId: req.user._id };
+
+    const notifications = await Notification.find(filter)
       .sort({ createdAt: -1 })
-      .limit(30);
+      .limit(50)
+      .lean();
 
-    const unreadCount = notifications.filter(n => !n.isRead).length;
-
-    res.status(200).json({ notifications, unreadCount });
+    res.status(200).json({
+      success:     true,
+      data:        notifications,
+      unreadCount: notifications.filter(n => !n.read).length,
+    });
   } catch (err) {
     console.error('[getMyNotifications]', err);
     res.status(500).json({ message: 'Erreur serveur.' });
   }
 };
 
-// ─────────────────────────────────────────────────────────────
-// PATCH /api/notifications/:id/read
-// Marque une notification spécifique comme lue
-// ─────────────────────────────────────────────────────────────
 exports.markRead = async (req, res) => {
   try {
     const notif = await Notification.findOneAndUpdate(
-      { _id: req.params.id, user: req.user._id },
-      { isRead: true },
+      { _id: req.params.id, recipientId: req.user._id },
+      { read: true, readAt: new Date() },
       { new: true }
     );
-
     if (!notif) return res.status(404).json({ message: 'Notification introuvable.' });
-
     res.status(200).json({ success: true, notification: notif });
   } catch (err) {
     console.error('[markRead]', err);
@@ -42,40 +35,26 @@ exports.markRead = async (req, res) => {
   }
 };
 
-// ─────────────────────────────────────────────────────────────
-// PATCH /api/notifications/mark-all-read
-// Marque TOUTES les notifs du user comme lues
-// ─────────────────────────────────────────────────────────────
 exports.markAllRead = async (req, res) => {
   try {
     const result = await Notification.updateMany(
-      { user: req.user._id, isRead: false },
-      { isRead: true }
+      { recipientId: req.user._id, read: false },
+      { $set: { read: true, readAt: new Date() } }
     );
-
-    res.status(200).json({
-      success: true,
-      updated: result.modifiedCount,
-    });
+    res.status(200).json({ success: true, updated: result.modifiedCount });
   } catch (err) {
     console.error('[markAllRead]', err);
     res.status(500).json({ message: 'Erreur serveur.' });
   }
 };
 
-// ─────────────────────────────────────────────────────────────
-// DELETE /api/notifications/:id
-// Supprime une notification
-// ─────────────────────────────────────────────────────────────
 exports.deleteNotification = async (req, res) => {
   try {
     const notif = await Notification.findOneAndDelete({
-      _id:  req.params.id,
-      user: req.user._id,
+      _id:         req.params.id,
+      recipientId: req.user._id,
     });
-
     if (!notif) return res.status(404).json({ message: 'Notification introuvable.' });
-
     res.status(200).json({ success: true });
   } catch (err) {
     console.error('[deleteNotification]', err);
@@ -83,17 +62,12 @@ exports.deleteNotification = async (req, res) => {
   }
 };
 
-// ─────────────────────────────────────────────────────────────
-// GET /api/notifications/unread-count
-// Compte rapide des non-lues (pour le badge dans le header)
-// ─────────────────────────────────────────────────────────────
 exports.getUnreadCount = async (req, res) => {
   try {
     const count = await Notification.countDocuments({
-      user:   req.user._id,
-      isRead: false,
+      recipientId: req.user._id,
+      read:        false,
     });
-
     res.status(200).json({ unreadCount: count });
   } catch (err) {
     console.error('[getUnreadCount]', err);

@@ -244,8 +244,8 @@ function EmailModal({ item, type, startupName, onClose, onSend }) {
 // ════════════════════════════════════════════════════════════════════════════
 // COMPOSANT PRINCIPAL
 // ════════════════════════════════════════════════════════════════════════════
-export default function MatchingPanel({ applicationId, applicationStatus }) {
-  const { accessToken: token } = useSelector((s) => s.auth);
+export default function MatchingPanel({ applicationId, applicationStatus, onApproved }) {
+  const { token } = useSelector((s) => s.auth);
 
   const [data,         setData]         = useState(null);
   const [loading,      setLoading]      = useState(false);
@@ -361,7 +361,7 @@ export default function MatchingPanel({ applicationId, applicationStatus }) {
 
       const d = await fetchMatches(true); // silencieux
 
-      const isDone   = d?.status === 'completed' || d?.matchStatus === 'completed';
+      const isDone   = d?.status === 'completed' || d?.matchStatus === 'completed' || (d?.investors?.length > 0 || d?.mentors?.length > 0);
       const isFailed = d?.status === 'failed'    || d?.matchStatus === 'failed';
       const maxed    = attempts >= POLL_MAX_ATTEMPTS;
 
@@ -383,6 +383,11 @@ export default function MatchingPanel({ applicationId, applicationStatus }) {
   // ── Déclencher le matching (mode ASYNC + polling) ─────────────────────────
   const handleTrigger = async () => {
     if (triggering) return;
+    // Bloquer si pas de besoins
+    if (data?.hasNeeds === false) {
+      showNotif('⚠ Ajoutez des besoins avant de lancer le matching.', 'error');
+      return;
+    }
     setTriggering(true);
     setError(null);
     try {
@@ -397,7 +402,7 @@ export default function MatchingPanel({ applicationId, applicationStatus }) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.message || `Erreur HTTP ${res.status}`);
       }
-      showNotif('🚀 Matching lancé — polling en cours…', 'info');
+      showNotif(' Matching lancé — polling en cours…', 'info');
       startPolling();
     } catch (err) {
       setError(err.message);
@@ -425,8 +430,6 @@ export default function MatchingPanel({ applicationId, applicationStatus }) {
       });
       if (!res.ok) throw new Error(`Erreur ${res.status}`);
 
-      showNotif(action === 'approve' ? '✅ Match validé.' : '❌ Match rejeté.');
-
       // Mise à jour optimiste du state
       setData((prev) => {
         if (!prev) return prev;
@@ -436,11 +439,29 @@ export default function MatchingPanel({ applicationId, applicationStatus }) {
               ? { ...x, status: action === 'approve' ? 'approved' : 'rejected' }
               : x
           );
-        return {
+        const updated = {
           ...prev,
           investors: isInvestor ? updateList(prev.investors, 'investorId') : prev.investors,
           mentors:  !isInvestor ? updateList(prev.mentors,   'mentorId')   : prev.mentors,
         };
+
+        // Vérifier si tous les matches ont été examinés (plus de "pending")
+        const allItems = [...(updated.investors || []), ...(updated.mentors || []), ...(updated.jury || [])];
+        const anyPending = allItems.some((x) => !x.status || x.status === 'pending');
+
+        // Notification et callback après approbation
+        if (action === 'approve') {
+          if (!anyPending) {
+            showNotif("✅ Match validé. Pensez à finaliser l'assignation dans l'onglet dédié.");
+            if (typeof onApproved === 'function') onApproved();
+          } else {
+            showNotif('✅ Match validé.');
+          }
+        } else {
+          showNotif('❌ Match rejeté.');
+        }
+
+        return updated;
       });
     } catch (err) {
       showNotif(err.message, 'error');
@@ -560,25 +581,40 @@ export default function MatchingPanel({ applicationId, applicationStatus }) {
       )}
 
       {/* État vide — aucun matching encore */}
-      {!loading && !triggering && !error && !data && (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <div className="w-14 h-14 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-300 dark:text-gray-600 mb-4">
-            {Icons.spark}
-          </div>
-          <p className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1">Aucun matching généré</p>
-          <p className="text-xs text-gray-400 mb-4">Lancez le matching IA pour obtenir des recommandations.</p>
-          <button
-            onClick={handleTrigger}
-            disabled={triggering}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all disabled:opacity-50"
-          >
-            {Icons.spark} Lancer le matching
-          </button>
-        </div>
-      )}
+ {!loading && !triggering && !error && !data && (
+  <div className="flex flex-col items-center justify-center py-12 text-center">
+    <div className="w-14 h-14 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-300 dark:text-gray-600 mb-4">
+      {Icons.spark}
+    </div>
+    <p className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1">Aucun matching généré</p>
+    <p className="text-xs text-gray-400 mb-4">Ajoutez des besoins dans l'onglet "Besoins", puis lancez le matching.</p>
+  </div>
+)}
 
-      {/* Résultats */}
-      {!loading && data && (
+{/* Besoins non renseignés — matching bloqué */}
+{!loading && data && data.hasNeeds === false && !triggering && (
+  <div className="flex flex-col items-center justify-center py-12 text-center">
+    <div className="w-14 h-14 rounded-2xl bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center text-amber-400 mb-4">
+      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+      </svg>
+    </div>
+    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Besoins non renseignés</p>
+    <p className="text-xs text-gray-400 mb-4 max-w-xs">
+      Ajoutez au moins un besoin dans l'onglet <strong>"Besoins"</strong> pour générer un matching pertinent.
+    </p>
+    <button
+      onClick={() => {/* pas de trigger ici */}}
+      disabled
+      className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-gray-100 dark:bg-gray-800 text-gray-400 rounded-xl cursor-not-allowed"
+    >
+      {Icons.spark} Lancer le matching
+    </button>
+  </div>
+)}
+
+{/* Résultats — uniquement si hasNeeds */}
+    {!loading && data && data.hasNeeds !== false && (
         <>
           {/* Onglets */}
           <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">

@@ -1,32 +1,60 @@
-// src/routes/notificationRoutes.js
+const router       = require('express').Router();
+const { protect }  = require('../middlewares/authMiddleware');
+const Notification = require('../models/Notification');
 
-const express = require('express');
-const router  = express.Router();
+router.get('/', protect, async (req, res) => {
+  try {
+    const filter = { recipientId: req.user._id };
 
-const {
-  getMyNotifications,
-  markRead,
-  markAllRead,
-  deleteNotification,
-  getUnreadCount,
-} = require('../controllers/notificationController');
+    const notifications = await Notification.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
 
-const { protect } = require('../middlewares/authMiddleware');
+    res.json({
+      success:     true,
+      data:        notifications,
+      unreadCount: notifications.filter(n => !n.read).length,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
-// Toutes les routes nécessitent d'être connecté (n'importe quel rôle)
-router.use(protect);
+router.patch('/read-all', protect, async (req, res) => {
+  try {
+    const result = await Notification.updateMany(
+      { recipientId: req.user._id, read: false },
+      { $set: { read: true, readAt: new Date() } }
+    );
+    res.json({ success: true, updated: result.modifiedCount });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
-// GET    /api/notifications/me             → mes notifications + unreadCount
-// GET    /api/notifications/unread-count   → juste le nombre de non-lues
-// PATCH  /api/notifications/mark-all-read  → tout marquer comme lu
-// PATCH  /api/notifications/:id/read       → marquer 1 notif comme lue
-// DELETE /api/notifications/:id            → supprimer une notif
+router.patch('/:id/read', protect, async (req, res) => {
+  try {
+    await Notification.findOneAndUpdate(
+      { _id: req.params.id, recipientId: req.user._id },
+      { $set: { read: true, readAt: new Date() } }
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
-// ⚠️ Les routes spécifiques AVANT la route dynamique :id
-router.get('/me',              getMyNotifications);
-router.get('/unread-count',    getUnreadCount);
-router.patch('/mark-all-read', markAllRead);
-router.patch('/:id/read',      markRead);
-router.delete('/:id',          deleteNotification);
+router.delete('/:id', protect, async (req, res) => {
+  try {
+    await Notification.findOneAndDelete({
+      _id:         req.params.id,
+      recipientId: req.user._id,
+    });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 module.exports = router;

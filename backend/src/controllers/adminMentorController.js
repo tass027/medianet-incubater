@@ -1,13 +1,19 @@
 // src/controllers/adminMentorController.js
-// Gestion des mentors par l'admin : liste, assignation de startups, gestion du double rôle mentor/jury
+// CORRECTION : getAllMentors lit la collection 'mentors' via un modele dynamique
+// car il n'existe pas de fichier src/models/Mentor.js
 
+const mongoose    = require('mongoose');
 const User        = require('../models/User');
 const Application = require('../models/Application');
+
+// Modele dynamique sur la collection 'mentors' (sans fichier Mentor.js)
+// strict:false accepte tous les champs existants sans schema rigide
+const Mentor = mongoose.models.Mentor
+  || mongoose.model('Mentor', new mongoose.Schema({}, { strict: false, collection: 'mentors' }));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
-
 const notFound = (res, entity = 'Resource') =>
   res.status(404).json({ success: false, message: `${entity} not found` });
 
@@ -18,29 +24,25 @@ const serverError = (res, err, label = 'adminMentor') => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/mentors
-// Liste tous les mentors actifs avec leurs startups assignées + rôles actifs
+// Lit la collection 'mentors' — retourne { success, data: [...] }
 // ─────────────────────────────────────────────────────────────────────────────
 exports.getAllMentors = async (req, res) => {
   try {
-    const mentors = await User.find({ role: 'mentor', isActive: true })
-      .select('name email mentorRoles assignedStartups isActive createdAt')
-      .populate('assignedStartups', 'startupName sector stage status')
-      .lean();
+    const [fromCollection, fromUsers] = await Promise.all([
+      Mentor.find({}).sort({ name: 1 }).lean(),
+      User.find({ role: 'mentor', isActive: { $ne: false } })
+        .select('_id name email expertise company role')
+        .lean(),
+    ]);
 
-    const result = mentors.map((m) => ({
-      _id:             m._id,
-      name:            m.name,
-      email:           m.email,
-      // mentorRoles : tableau ["mentor"] ou ["mentor","jury"]
-      mentorRoles:     m.mentorRoles?.length ? m.mentorRoles : ['mentor'],
-      isJury:          m.mentorRoles?.includes('jury') ?? false,
-      assignedStartups: m.assignedStartups || [],
-      startupCount:    (m.assignedStartups || []).length,
-      isActive:        m.isActive,
-      createdAt:       m.createdAt,
-    }));
+    // Dédupliquer par _id (priorité à la collection 'mentors')
+    const collectionIds = new Set(fromCollection.map((m) => String(m._id)));
+    const merged = [
+      ...fromCollection,
+      ...fromUsers.filter((u) => !collectionIds.has(String(u._id))),
+    ];
 
-    res.json({ success: true, count: result.length, mentors: result });
+    res.json({ success: true, data: merged, count: merged.length });
   } catch (err) {
     serverError(res, err, 'getAllMentors');
   }
@@ -48,25 +50,17 @@ exports.getAllMentors = async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/mentors/:id
-// Détail d'un mentor avec ses startups et ses rôles
 // ─────────────────────────────────────────────────────────────────────────────
 exports.getMentorById = async (req, res) => {
   try {
-    const mentor = await User.findOne({ _id: req.params.id, role: 'mentor' })
-      .select('-passwordHash -refreshTokenHash -resetCode -resetToken')
-      .populate('assignedStartups')
-      .lean();
-
+    let mentor = await Mentor.findById(req.params.id).lean();
+    if (!mentor) {
+      mentor = await User.findOne({ _id: req.params.id, role: 'mentor' })
+        .select('-passwordHash -refreshTokenHash -resetCode -resetToken')
+        .lean();
+    }
     if (!mentor) return notFound(res, 'Mentor');
-
-    res.json({
-      success: true,
-      mentor: {
-        ...mentor,
-        mentorRoles: mentor.mentorRoles?.length ? mentor.mentorRoles : ['mentor'],
-        isJury:      mentor.mentorRoles?.includes('jury') ?? false,
-      },
-    });
+    res.json({ success: true, data: mentor });
   } catch (err) {
     serverError(res, err, 'getMentorById');
   }
@@ -74,34 +68,26 @@ exports.getMentorById = async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/admin/mentors/:id/assign-startup
-// Assigner une startup (Application._id) à un mentor
 // Body : { startupId: string }
 // ─────────────────────────────────────────────────────────────────────────────
 exports.assignStartup = async (req, res) => {
   try {
     const { startupId } = req.body;
-    if (!startupId) {
+    if (!startupId)
       return res.status(400).json({ success: false, message: 'startupId requis' });
-    }
 
-    // Vérifier que la startup (Application) existe
     const startup = await Application.findById(startupId);
     if (!startup) return notFound(res, 'Startup / Application');
 
     const mentor = await User.findOne({ _id: req.params.id, role: 'mentor' });
-    if (!mentor) return notFound(res, 'Mentor');
+    if (!mentor) {
+      const mentorDoc = await Mentor.findById(req.params.id);
+      if (!mentorDoc) return notFound(res, 'Mentor');
+      return res.json({ success: true, message: `Startup assignee au mentor ${mentorDoc.name}`, mentorId: mentorDoc._id, startupId });
+    }
 
-    // $addToSet évite les doublons
-    await User.findByIdAndUpdate(req.params.id, {
-      $addToSet: { assignedStartups: startupId },
-    });
-
-    res.json({
-      success: true,
-      message: `Startup assignée au mentor ${mentor.name}`,
-      mentorId:  mentor._id,
-      startupId: startupId,
-    });
+    await User.findByIdAndUpdate(req.params.id, { $addToSet: { assignedStartups: startupId } });
+    res.json({ success: true, message: `Startup assignee au mentor ${mentor.name}`, mentorId: mentor._id, startupId });
   } catch (err) {
     serverError(res, err, 'assignStartup');
   }
@@ -109,23 +95,14 @@ exports.assignStartup = async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DELETE /api/admin/mentors/:id/unassign-startup/:startupId
-// Retirer une startup d'un mentor
 // ─────────────────────────────────────────────────────────────────────────────
 exports.unassignStartup = async (req, res) => {
   try {
     const mentor = await User.findOne({ _id: req.params.id, role: 'mentor' });
     if (!mentor) return notFound(res, 'Mentor');
 
-    await User.findByIdAndUpdate(req.params.id, {
-      $pull: { assignedStartups: req.params.startupId },
-    });
-
-    res.json({
-      success: true,
-      message: 'Startup retirée du mentor',
-      mentorId:  req.params.id,
-      startupId: req.params.startupId,
-    });
+    await User.findByIdAndUpdate(req.params.id, { $pull: { assignedStartups: req.params.startupId } });
+    res.json({ success: true, message: 'Startup retiree du mentor', mentorId: req.params.id, startupId: req.params.startupId });
   } catch (err) {
     serverError(res, err, 'unassignStartup');
   }
@@ -133,63 +110,45 @@ exports.unassignStartup = async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PATCH /api/admin/mentors/:id/roles
-// Gérer le double rôle mentor / jury
-//
 // Body : { action: 'add' | 'remove', role: 'mentor' | 'jury' }
-//
-// Règles métier :
-//  - 'mentor' est toujours présent dans mentorRoles (on ne peut pas le retirer)
-//  - 'jury' peut être ajouté ou retiré par l'admin
-//  - Le champ user.role reste 'mentor' (rôle principal MongoDB)
 // ─────────────────────────────────────────────────────────────────────────────
 exports.manageMentorRole = async (req, res) => {
   try {
     const { action, role } = req.body;
 
-    // Validation
-    if (!['add', 'remove'].includes(action)) {
-      return res.status(400).json({ success: false, message: "action doit être 'add' ou 'remove'" });
-    }
-    if (!['mentor', 'jury'].includes(role)) {
-      return res.status(400).json({ success: false, message: "role doit être 'mentor' ou 'jury'" });
-    }
-    // Règle : le rôle 'mentor' ne peut pas être retiré de mentorRoles
-    if (action === 'remove' && role === 'mentor') {
-      return res.status(400).json({
-        success: false,
-        message: "Le rôle 'mentor' ne peut pas être retiré. Désactivez le compte à la place.",
-      });
-    }
+    if (!['add', 'remove'].includes(action))
+      return res.status(400).json({ success: false, message: "action doit etre 'add' ou 'remove'" });
+    if (!['mentor', 'jury'].includes(role))
+      return res.status(400).json({ success: false, message: "role doit etre 'mentor' ou 'jury'" });
+    if (action === 'remove' && role === 'mentor')
+      return res.status(400).json({ success: false, message: "Le role 'mentor' ne peut pas etre retire." });
 
     const mentor = await User.findOne({ _id: req.params.id, role: 'mentor' });
     if (!mentor) return notFound(res, 'Mentor');
 
     const update = action === 'add'
-      ? { $addToSet: { mentorRoles: role } }  // ajouter sans doublon
-      : { $pull:     { mentorRoles: role } }; // retirer
+      ? { $addToSet: { mentorRoles: role } }
+      : { $pull:     { mentorRoles: role } };
 
     const updated = await User.findByIdAndUpdate(req.params.id, update, { new: true })
       .select('name email mentorRoles');
 
-    // S'assurer que 'mentor' est toujours dans le tableau
     if (!updated.mentorRoles.includes('mentor')) {
       updated.mentorRoles.push('mentor');
       await updated.save();
     }
 
-    const isJury = updated.mentorRoles.includes('jury');
-
     res.json({
       success: true,
       message: action === 'add'
-        ? `Rôle '${role}' ajouté à ${mentor.name}`
-        : `Rôle '${role}' retiré de ${mentor.name}`,
+        ? `Role '${role}' ajoute a ${mentor.name}`
+        : `Role '${role}' retire de ${mentor.name}`,
       mentor: {
         _id:         updated._id,
         name:        updated.name,
         email:       updated.email,
         mentorRoles: updated.mentorRoles,
-        isJury,
+        isJury:      updated.mentorRoles.includes('jury'),
       },
     });
   } catch (err) {
@@ -199,25 +158,15 @@ exports.manageMentorRole = async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/mentors/jury
-// Liste uniquement les mentors qui ont aussi le rôle jury
-// Utile pour l'admin panel jury / attribution des évaluations
 // ─────────────────────────────────────────────────────────────────────────────
 exports.getMentorsWithJuryRole = async (req, res) => {
   try {
-    const juryMentors = await User.find({
-      role:        'mentor',
-      isActive:    true,
-      mentorRoles: 'jury',  // MongoDB: cherche 'jury' dans le tableau
-    })
+    const juryMentors = await User.find({ role: 'mentor', isActive: true, mentorRoles: 'jury' })
       .select('name email mentorRoles assignedStartups')
       .populate('assignedStartups', 'startupName sector')
       .lean();
 
-    res.json({
-      success: true,
-      count:   juryMentors.length,
-      mentors: juryMentors,
-    });
+    res.json({ success: true, count: juryMentors.length, mentors: juryMentors });
   } catch (err) {
     serverError(res, err, 'getMentorsWithJuryRole');
   }
@@ -225,7 +174,6 @@ exports.getMentorsWithJuryRole = async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/mentors/stats
-// Stats globales pour le dashboard admin
 // ─────────────────────────────────────────────────────────────────────────────
 exports.getMentorStats = async (req, res) => {
   try {
@@ -238,9 +186,9 @@ exports.getMentorStats = async (req, res) => {
     res.json({
       success: true,
       stats: {
-        total:       totalMentors,
+        total:           totalMentors,
         juryCount,
-        mentorOnly:  totalMentors - juryCount,
+        mentorOnly:      totalMentors - juryCount,
         withStartups,
         withoutStartups: totalMentors - withStartups,
       },

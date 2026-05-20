@@ -43,6 +43,7 @@ mentorRouter.use(protect, authorize('mentor'));
 
 mentorRouter.get('/sessions',               ctrl.getMentorSessions);
 mentorRouter.patch('/sessions/:id/decision',ctrl.mentorDecision);
+mentorRouter.post('/sessions', ctrl.mentorCreate);
 
 module.exports = {
   admin:     adminRouter,

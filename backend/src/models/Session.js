@@ -14,11 +14,17 @@ const SpeakerSchema = new Schema({
 
 const SessionSchema = new Schema({
   // ── Core ────────────────────────────────────────────────────────────────
-  type: {
-    type: String,
-    required: true,
-    enum: ['workshop', 'conference', 'one2one', 'pitching', 'mentoring', 'masterclass'],
-  },
+type: {
+  type: String,
+  required: true,
+  enum: [
+    'workshop',      // Atelier pratique en groupe
+    'formation',     // Module de formation structuré
+    'conference',    // Présentation ou keynote
+    'pitching',      // Pitch & Investisseurs (garder 'pitching' comme valeur interne)
+    'mentoring',   // Masterclass (non affiché mais gardé pour compatibilité)
+  ],
+},
   title:       { type: String, required: true, trim: true, maxlength: 200 },
   domain:      { type: String, trim: true, default: '' },
   description: { type: String, trim: true, default: '' },

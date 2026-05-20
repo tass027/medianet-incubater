@@ -11,7 +11,7 @@ const authRoutes              = require('./routes/authRoutes');
 const applicationRoutes       = require('./routes/applicationRoutes');
 const applicationAdminRoutes  = require('./routes/applicationAdminRoutes');
 const applyRoutes             = require('./routes/applyRoutes');
-const notificationRoutes      = require('./routes/notificationRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 const startupRoutes           = require('./routes/startup.routes');
 const juryRoutes              = require('./routes/juryRoutes');
 const jurySpaceRoutes         = require('./routes/jurySpaceRoutes');
@@ -33,6 +33,8 @@ const candidaturesRoutes = require('./routes/candidaturesRoutes');
 const startupsProgrammesRoutes = require('./routes/startupsProgrammesRoutes');
 const matchRoutes             = require('./routes/matchroutes');
 const mentorMatchRoutes       = require('./routes/mentorMatchRoutes');
+const aiReportingRoutes       = require('./routes/aiReportingRoutes');
+const aiChatbotRoutes = require('./routes/aiChatbotRoutes');
 
 const app = express();
 
@@ -89,10 +91,13 @@ app.use('/api/evaluations', evaluationRoutes);
 
 // AI
 app.use('/ai-scoring',   aiScoringRoutes);
+app.use('/api/admin/ai-reporting', aiReportingRoutes);
 app.use('/api/matching', matchingRoutes);
+app.use('/api/ai/chat', aiChatbotRoutes);
 
 // Investors
 app.use('/api/investors', investorRoutes);
+app.use('/api/admin/investors', investorRoutes); // Alias admin route for frontend lookup
 
 // Admin — Startups
 app.use('/api/admin/startups', adminStartupsRoutes);

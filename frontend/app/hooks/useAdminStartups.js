@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSelector } from 'react-redux';
 
 // ─── Normalise une startup venant du backend ──────────────────────────────────
@@ -172,25 +172,27 @@ function resolveToken(reduxState) {
 // HOOK PRINCIPAL
 // ════════════════════════════════════════════════════════════════
 export function useAdminStartups({ sector, status, search } = {}) {
-  // Lire tout le state auth pour pouvoir essayer plusieurs clés
   const authState = useSelector((state) => state.auth);
+  
+  // ← Stocker authState dans un ref pour que les callbacks lisent toujours la valeur fraîche
+  const authRef = useRef(authState);
+  useEffect(() => {
+    authRef.current = authState;
+  }, [authState]);
 
   const [startups, setStartups] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState(null);
 
-  // Construit les headers avec le bon token
-  const makeHeaders = useCallback(
-    (extra = {}) => {
-      const tok = resolveToken(authState);
-      return {
-        'Content-Type': 'application/json',
-        ...(tok ? { Authorization: `Bearer ${tok}` } : {}),
-        ...extra,
-      };
-    },
-    [authState]
-  );
+  // makeHeaders lit depuis le ref → toujours à jour, sans dépendance instable
+  const makeHeaders = useCallback((extra = {}) => {
+    const tok = resolveToken(authRef.current);
+    return {
+      'Content-Type': 'application/json',
+      ...(tok ? { Authorization: `Bearer ${tok}` } : {}),
+      ...extra,
+    };
+  }, []); // ← dépendances vides : stable pour toujours
 
   const fetchStartups = useCallback(async () => {
     setLoading(true);
@@ -201,18 +203,12 @@ export function useAdminStartups({ sector, status, search } = {}) {
       if (status && status !== 'all') params.set('status', status);
       if (search) params.set('search', search);
 
-      const tok = resolveToken(authState);
-
       const res = await fetch(`/api/admin/startups?${params}`, {
         credentials: 'include',
-        headers: {
-          ...(tok ? { Authorization: `Bearer ${tok}` } : {}),
-        },
+        headers: makeHeaders(),
       });
 
-      if (res.status === 401) {
-        throw new Error('Session expirée — veuillez vous reconnecter (401).');
-      }
+      if (res.status === 401) throw new Error('Session expirée (401).');
       if (!res.ok) {
         let msg = `Erreur ${res.status}`;
         try { const j = await res.json(); msg = j.message || msg; } catch {}
@@ -222,7 +218,6 @@ export function useAdminStartups({ sector, status, search } = {}) {
       const json = await res.json();
       const raw  = json.data || json.startups || json || [];
       const arr  = Array.isArray(raw) ? raw : Object.values(raw);
-
       setStartups(arr.map(normalizeStartup));
     } catch (err) {
       setError(err.message);
@@ -230,29 +225,35 @@ export function useAdminStartups({ sector, status, search } = {}) {
     } finally {
       setLoading(false);
     }
-  }, [authState, sector, status, search]);
+  }, [sector, status, search, makeHeaders]);
 
-  useEffect(() => {
-    fetchStartups();
-  }, [fetchStartups]);
+  useEffect(() => { fetchStartups(); }, [fetchStartups]);
 
   const updateAssignments = useCallback(
     async (startupId, investorIds, mentorIds) => {
+      if (!startupId) throw new Error('startupId manquant');
+
       const res = await fetch(`/api/admin/startups/${startupId}/assign`, {
         method: 'PATCH',
         credentials: 'include',
         headers: makeHeaders(),
-        body: JSON.stringify({ investorIds, mentorIds }),
+        body: JSON.stringify({
+          investorIds: investorIds.map(String), // ← forcer strings
+          mentorIds:   mentorIds.map(String),
+        }),
       });
+
       if (!res.ok) {
         let msg = `Erreur ${res.status}`;
         try { const j = await res.json(); msg = j.message || msg; } catch {}
         throw new Error(msg);
       }
+
       const json = await res.json();
       setStartups((prev) =>
-        prev.map((s) =>
-          s.id === startupId ? { ...s, investorIds, mentorIds } : s
+        prev.map((s) => s.id === String(startupId)
+          ? { ...s, investorIds: investorIds.map(String), mentorIds: mentorIds.map(String) }
+          : s
         )
       );
       return json;
@@ -275,10 +276,9 @@ export function useAdminStartups({ sector, status, search } = {}) {
       }
       const json = await res.json();
       setStartups((prev) =>
-        prev.map((s) =>
-          s.id === startupId
-            ? { ...s, timelinePhase, timelineProgress, timelineNotes }
-            : s
+        prev.map((s) => s.id === String(startupId)
+          ? { ...s, timelinePhase, timelineProgress, timelineNotes }
+          : s
         )
       );
       return json;
@@ -286,12 +286,5 @@ export function useAdminStartups({ sector, status, search } = {}) {
     [makeHeaders]
   );
 
-  return {
-    startups,
-    loading,
-    error,
-    refetch: fetchStartups,
-    updateAssignments,
-    updateTimeline,
-  };
+  return { startups, loading, error, refetch: fetchStartups, updateAssignments, updateTimeline };
 }

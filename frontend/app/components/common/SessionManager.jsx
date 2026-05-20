@@ -92,9 +92,9 @@ const SESSION_TYPES = [
     id: 'workshop',
     label: 'Workshop',
     description: 'Atelier pratique en groupe',
-    color: '#006d94',
-    bg: 'rgba(0,109,148,0.08)',
-    border: 'rgba(0,109,148,0.25)',
+    color: '#6d28d9',
+    bg: 'rgba(109,40,217,0.08)',
+    border: 'rgba(109,40,217,0.25)',
   },
   {
     id: 'formation',
@@ -113,7 +113,7 @@ const SESSION_TYPES = [
     border: 'rgba(5,150,105,0.25)',
   },
   {
-    id: 'pitch',
+    id: 'pitching',
     label: 'Pitch & Investisseurs',
     description: 'Session de pitch face à des investisseurs',
     color: '#d97706',

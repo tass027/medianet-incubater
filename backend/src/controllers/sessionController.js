@@ -2,18 +2,11 @@
 const Session      = require('../models/Session');
 const User         = require('../models/User');
 const Application  = require('../models/Application');
-const Notification = require('../models/Notification');
+const notificationService = require('../services/notificationService');
 const { sendSessionEmails } = require('../services/sessionEmailService');
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
-async function createNotification({ userId, type, title, message, link, meta }) {
-  try {
-    await Notification.create({ userId, type, title, message, link, meta, read: false });
-  } catch (err) {
-    console.warn('[sessions] Notification skipped:', err.message);
-  }
-}
 
 function resolveStartupName(startup) {
   return (
@@ -135,24 +128,26 @@ exports.createMentoring = async (req, res) => {
 
     // ── In-app notifications ──────────────────────────────────────────────────
     if (notifyMentor) {
-      await createNotification({
-        userId:  mentor._id,
-        type:    'mentoring_request',
-        title:   'Invitation — Session de mentorat',
-        message: `Vous êtes invité(e) à accompagner ${startupName} : "${rest.title}"`,
-        link:    `/mentor/sessions/${session._id}`,
-        meta:    { sessionId: session._id, startupName },
+      await notificationService.create({
+        recipientId:   mentor._id,
+        recipientRole: 'mentor',
+        type:          'mentoring_request',
+        title:         'Invitation — Session de mentorat',
+        body:          `Vous êtes invité(e) à accompagner ${startupName} : "${rest.title}"`,
+        link:          `/dashboard/mentor/sessions`,
+        data:          { sessionId: session._id, startupName },
       });
     }
 
     if (notifyStartup && startup.applicant) {
-      await createNotification({
-        userId:  startup.applicant,
-        type:    'session_scheduled',
-        title:   'Session planifiée',
-        message: `Une session "${rest.title}" a été planifiée avec ${mentor.name}.`,
-        link:    `/dashboard/applicant/sessions/${session._id}`,
-        meta:    { sessionId: session._id, mentorName: mentor.name },
+      await notificationService.create({
+        recipientId:   startup.applicant,
+        recipientRole: 'startup',
+        type:          'session_assigned',
+        title:         'Session planifiée',
+        body:          `Une session "${rest.title}" a été planifiée avec ${mentor.name}.`,
+        link:          `/dashboard/startup/status`,
+        data:          { sessionId: session._id, mentorName: mentor.name },
       });
     }
 
@@ -191,13 +186,14 @@ exports.mentorDecision = async (req, res) => {
     // Notify startup
     if (session.startupId?.applicant) {
       const label = decision === 'accepted' ? 'accepté' : decision === 'declined' ? 'décliné' : 'proposé un autre créneau pour';
-      await createNotification({
-        userId:  session.startupId.applicant,
-        type:    'mentor_decision',
-        title:   `Session ${decision === 'accepted' ? 'confirmée' : 'mise à jour'}`,
-        message: `${session.mentorId?.name || 'Le mentor'} a ${label} la session "${session.title}".`,
-        link:    `/dashboard/applicant/sessions/${session._id}`,
-        meta:    { sessionId: session._id, decision },
+      await notificationService.create({
+        recipientId:   session.startupId.applicant,
+        recipientRole: 'startup',
+        type:          'mentor_decision',
+        title:         `Session ${decision === 'accepted' ? 'confirmée' : 'mise à jour'}`,
+        body:          `${session.mentorId?.name || 'Le mentor'} a ${label} la session "${session.title}".`,
+        link:          `/dashboard/startup/status`,
+        data:          { sessionId: session._id, decision },
       });
     }
 
@@ -249,13 +245,14 @@ exports.mentorCreate = async (req, res) => {
     }).catch(e => console.error('[sessions.mentorCreate] email:', e.message));
 
     if (notifyStartup && startup.applicant) {
-      await createNotification({
-        userId:  startup.applicant,
-        type:    'session_scheduled',
-        title:   'Nouvelle session planifiée',
-        message: `${req.user.name} a planifié "${rest.title}".`,
-        link:    `/dashboard/applicant/sessions/${session._id}`,
-        meta:    { sessionId: session._id, mentorName: req.user.name },
+      await notificationService.create({
+        recipientId:   startup.applicant,
+        recipientRole: 'startup',
+        type:          'session_assigned',
+        title:         'Nouvelle session planifiée',
+        body:          `${req.user.name} a planifié "${rest.title}".`,
+        link:          `/dashboard/startup/status`,
+        data:          { sessionId: session._id, mentorName: req.user.name },
       });
     }
 
