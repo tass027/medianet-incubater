@@ -1,18 +1,50 @@
-# MEDIANET Incubator
+<div align="center">
 
-Plateforme web de gestion du processus d'incubation de MEDIANET Incubateur : candidatures, évaluation par des jurys, suivi des startups incubées, mise en relation avec mentors et investisseurs, avec des modules d'intelligence artificielle (scoring, matching, reporting, chatbot).
+<img src="assets/banner.svg" alt="MEDIANET Incubator" width="100%">
 
-Projet de fin d'études (PFE) de la Licence en Génie Logiciel et Systèmes d'Information, ISI, Université Tunis El Manar. Réalisé au sein de MEDIANET.
+<br>
 
-![Espace public : programmes d'incubation](docs/screenshots/01-programmes-publics.png)
+![Next.js](https://img.shields.io/badge/Next.js-React-7c3aed?style=flat-square&logo=nextdotjs&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-Express-a855f7?style=flat-square&logo=nodedotjs&logoColor=white)
+![MongoDB](https://img.shields.io/badge/MongoDB-Database-d946ef?style=flat-square&logo=mongodb&logoColor=white)
+![Ollama](https://img.shields.io/badge/Ollama-Local%20LLM-ec4899?style=flat-square)
+![PFE](https://img.shields.io/badge/PFE-ISI%20%C2%B7%20MEDIANET-7c3aed?style=flat-square)
+
+**Candidatures, jurys, startups, mentors et investisseurs : tout le cycle d'incubation dans une seule plateforme, avec des modules d'IA.**
+
+[Contexte](#contexte) · [Fonctionnalités](#fonctionnalités) · [Modules IA](#modules-dintelligence-artificielle) · [Captures](#captures-décran) · [Architecture](#architecture) · [Installation](#installation) · [Méthodologie](#méthodologie) · [Auteure](#auteure)
+
+</div>
+
+---
 
 ## Contexte
 
-La gestion d'un programme d'incubation implique plusieurs acteurs (administrateurs, startups, jurys, mentors, investisseurs). Avant ce projet, les candidatures reposaient sur des formulaires en ligne, des fichiers partagés et des échanges par e-mail, avec des évaluations partiellement manuelles, peu de traçabilité et aucun outil d'aide à la décision.
+Plateforme web de gestion du processus d'incubation de **MEDIANET Incubateur** : candidatures, évaluation par des jurys, suivi des startups incubées, mise en relation avec mentors et investisseurs, avec des modules d'intelligence artificielle (scoring, matching, reporting, chatbot).
 
-L'objectif est de centraliser tout le cycle d'incubation dans une seule plateforme, depuis le dépôt de la candidature jusqu'à l'accompagnement de la startup.
+Projet de fin d'études (PFE) de la Licence en Génie Logiciel et Systèmes d'Information, ISI, Université Tunis El Manar. Réalisé au sein de MEDIANET.
+
+**Problème.** La gestion d'un programme d'incubation implique plusieurs acteurs (administrateurs, startups, jurys, mentors, investisseurs). Avant ce projet, les candidatures reposaient sur des formulaires en ligne, des fichiers partagés et des échanges par e-mail, avec des évaluations partiellement manuelles, peu de traçabilité et aucun outil d'aide à la décision.
+
+**Solution.** Centraliser tout le cycle d'incubation dans une seule plateforme, depuis le dépôt de la candidature jusqu'à l'accompagnement de la startup.
+
+<div align="center">
+
+<img src="assets/metrics.svg" alt="Le projet en chiffres" width="100%">
+
+<br>
+
+<img src="docs/screenshots/01-programmes-publics.png" alt="Espace public : programmes d'incubation" width="100%">
+
+</div>
 
 ## Fonctionnalités
+
+<div align="center">
+
+<img src="assets/actors.svg" alt="Acteurs de la plateforme" width="100%">
+
+</div>
 
 | Acteur | Fonctionnalités principales |
 |---|---|
@@ -25,7 +57,13 @@ Les comptes internes (administrateur, jury, mentor) sont créés uniquement sur 
 
 ### Modules d'intelligence artificielle
 
-Les modules s'appuient sur Ollama (LLM exécuté en local). Leurs résultats sont des aides à la décision, validées par les utilisateurs concernés.
+Les modules s'appuient sur **Ollama** (LLM exécuté en local). Leurs résultats sont des aides à la décision, validées par les utilisateurs concernés.
+
+<div align="center">
+
+<img src="assets/ai-modules.svg" alt="Modules d'intelligence artificielle" width="100%">
+
+</div>
 
 - **Scoring des candidatures** : analyse des réponses du formulaire selon les critères du programme ; score global sur 100, pourcentage de compatibilité avec le programme, points forts et points faibles.
 - **Rapport d'évaluation** : synthèse des notes, remarques et recommandations des jurys dans un rapport unique, consultable et téléchargeable.
@@ -59,18 +97,15 @@ Les modules s'appuient sur Ollama (LLM exécuté en local). Leurs résultats son
 
 ## Architecture
 
-```mermaid
-flowchart LR
-  U["Utilisateurs<br/>Admin, Startup, Jury, Mentor"] -->|HTTPS| F["Frontend<br/>Next.js, React, Tailwind CSS"]
-  F -->|API REST| B["Backend<br/>Node.js, Express"]
-  B --> D[("MongoDB")]
-  B --> A["Modules IA<br/>Ollama"]
-  B --> S["Services externes<br/>E-mail, WebSocket, stockage de documents"]
-```
+<div align="center">
+
+<img src="assets/architecture.svg" alt="Architecture de la plateforme" width="100%">
+
+</div>
 
 L'architecture est organisée en couches (présentation, métier et API, IA, données, services externes) pour séparer les responsabilités et faciliter l'évolution du projet.
 
-## Stack technique
+### Stack technique
 
 | Couche | Technologies |
 |---|---|
@@ -132,13 +167,20 @@ npm run dev
 medianet-incubator/
 ├── backend/    # API REST, logique métier, modules IA
 ├── frontend/   # Interfaces Next.js
+├── assets/     # Graphiques du README
 └── docs/
     └── screenshots/   # Captures d'écran de l'application
 ```
 
 ## Méthodologie
 
-Développement agile avec Scrum, en trois sprints :
+Développement agile avec **Scrum**, en trois sprints.
+
+<div align="center">
+
+<img src="assets/sprints.svg" alt="Les trois sprints Scrum" width="100%">
+
+</div>
 
 | Sprint | Périmètre |
 |---|---|
@@ -150,4 +192,4 @@ Modélisation UML (cas d'utilisation, classes, séquence, activité) et maquette
 
 ## Auteure
 
-Tasnim Elmehrabi — [GitHub](https://github.com/tass027) · [LinkedIn](https://www.linkedin.com/in/VOTRE-PROFIL)
+**Tasnim Elmehrabi** · [GitHub](https://github.com/tass027) · [LinkedIn](https://www.linkedin.com/in/VOTRE-PROFIL)
